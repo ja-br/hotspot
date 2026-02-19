@@ -12,6 +12,8 @@ HOSTAPD_CONF="/etc/hostapd/hostapd.conf"
 DNSMASQ_CONF="/etc/dnsmasq.d/hotspot.conf"
 STATE_FILE="/run/hotspot.state"
 PREV_WIFI_FILE="/run/hotspot-prev-wifi"
+IPV4_FWD_ORIG="/run/hotspot-ipv4-fwd.orig"
+IPV6_FWD_ORIG="/run/hotspot-ipv6-fwd.orig"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -23,12 +25,12 @@ warn() { echo -e "${YELLOW}[hotspot]${NC} $*"; }
 err() { echo -e "${RED}[hotspot]${NC} $*" >&2; }
 
 is_running() {
-    [ -f "$STATE_FILE" ] && systemctl is-active --quiet hostapd 2>/dev/null
+    [ -f "$STATE_FILE" ] || systemctl is-active --quiet hostapd 2>/dev/null
 }
 
 save_current_wifi() {
     local ssid
-    ssid=$(nmcli -t -f active,ssid dev wifi 2>/dev/null | grep '^yes:' | cut -d: -f2- || true)
+    ssid=$(nmcli -t -f active,ssid dev wifi 2>/dev/null | grep '^yes:' | cut -d: -f2- | sed 's/\\:/:/g' || true)
     if [ -n "$ssid" ]; then
         echo "$ssid" > "$PREV_WIFI_FILE"
         log "Saved current WiFi: $ssid"
@@ -36,7 +38,15 @@ save_current_wifi() {
 }
 
 get_wan_gw6() {
-    mmcli -b 1 2>/dev/null | grep 'gateway:' | awk '{print $NF}' | head -1
+    local modem_output bearer_path
+    modem_output=$(mmcli -m 0 2>/dev/null) || return
+    bearer_path=$(echo "$modem_output" | awk '/Bearer/ {for(i=1;i<=NF;i++) if($i ~ /\/Bearer\//) print $i}' | head -1)
+    if [ -z "$bearer_path" ]; then
+        return
+    fi
+    local bearer_num
+    bearer_num=$(echo "$bearer_path" | awk -F/ '{print $NF}')
+    mmcli -b "$bearer_num" 2>/dev/null | grep 'gateway:' | awk '{print $NF}' | head -1
 }
 
 wait_for_clat() {
@@ -50,6 +60,49 @@ wait_for_clat() {
     return 1
 }
 
+cleanup_on_failure() {
+    err "Start failed — rolling back..."
+    trap - ERR
+
+    systemctl stop hostapd 2>/dev/null || true
+
+    if [ -f /run/dnsmasq-hotspot.pid ]; then
+        pkill -F /run/dnsmasq-hotspot.pid dnsmasq 2>/dev/null || true
+        rm -f /run/dnsmasq-hotspot.pid
+    fi
+
+    systemctl stop clatd 2>/dev/null || true
+
+    nft delete table ip hotspot_nat 2>/dev/null || true
+    nft delete table inet hotspot_fw 2>/dev/null || true
+
+    if [ -f "$IPV4_FWD_ORIG" ]; then
+        sysctl -w "net.ipv4.ip_forward=$(cat "$IPV4_FWD_ORIG")" >/dev/null
+        rm -f "$IPV4_FWD_ORIG"
+    else
+        sysctl -w net.ipv4.ip_forward=0 >/dev/null
+    fi
+    if [ -f "$IPV6_FWD_ORIG" ]; then
+        sysctl -w "net.ipv6.conf.all.forwarding=$(cat "$IPV6_FWD_ORIG")" >/dev/null
+        rm -f "$IPV6_FWD_ORIG"
+    else
+        sysctl -w net.ipv6.conf.all.forwarding=0 >/dev/null
+    fi
+
+    ip addr flush dev "$IFACE" 2>/dev/null || true
+    nmcli device set "$IFACE" managed yes 2>/dev/null || true
+
+    if [ -f "$PREV_WIFI_FILE" ]; then
+        local prev_ssid
+        prev_ssid=$(cat "$PREV_WIFI_FILE")
+        nmcli device wifi connect "$prev_ssid" 2>/dev/null || true
+        rm -f "$PREV_WIFI_FILE"
+    fi
+
+    rm -f "$STATE_FILE"
+    err "Rollback complete"
+}
+
 do_start() {
     if is_running; then
         warn "Hotspot is already running"
@@ -60,6 +113,8 @@ do_start() {
         err "WAN interface $WAN_IFACE is not up. Is LTE connected?"
         exit 1
     fi
+
+    trap cleanup_on_failure ERR
 
     log "Starting hotspot..."
 
@@ -77,8 +132,10 @@ do_start() {
     ip link set "$IFACE" up
     ip addr add "$HOTSPOT_IP" dev "$IFACE"
 
-    # Enable forwarding
+    # Save and enable forwarding
     log "Enabling IP forwarding..."
+    sysctl -n net.ipv4.ip_forward > "$IPV4_FWD_ORIG"
+    sysctl -n net.ipv6.conf.all.forwarding > "$IPV6_FWD_ORIG"
     sysctl -w net.ipv4.ip_forward=1 >/dev/null
     sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
 
@@ -95,7 +152,7 @@ do_start() {
     systemctl start clatd
     log "Waiting for clat interface..."
     if wait_for_clat; then
-        log "clat interface is up ($(ip -4 addr show clat | grep -oP 'inet \K[^/]+'))"
+        log "clat interface is up ($(ip -4 addr show clat | awk '/inet / {split($2, a, "/"); print a[1]}'))"
     else
         err "clatd failed to create clat interface after 30s"
         exit 1
@@ -124,7 +181,10 @@ table ip hotspot_nat {
         oifname "clat" masquerade
     }
     chain forward {
-        type filter hook forward priority filter; policy accept;
+        type filter hook forward priority filter; policy drop;
+        ct state established,related accept
+        iifname "wlan0" oifname "clat" accept
+        counter drop
     }
 }
 table inet hotspot_fw {
@@ -137,12 +197,13 @@ table inet hotspot_fw {
         iifname "wlan0" tcp dport 53 accept
         ip protocol icmp accept
         ip6 nexthdr icmpv6 accept
-        tcp dport 22 accept
+        iifname "wlan0" tcp dport 22 accept
         counter drop
     }
 }
 NFT
 
+    trap - ERR
     echo "running" > "$STATE_FILE"
 
     log "Hotspot is UP!"
@@ -152,7 +213,7 @@ NFT
 }
 
 do_stop() {
-    if ! is_running && [ ! -f "$STATE_FILE" ]; then
+    if ! is_running; then
         warn "Hotspot is not running"
         exit 0
     fi
@@ -164,7 +225,7 @@ do_stop() {
 
     log "Stopping dnsmasq..."
     if [ -f /run/dnsmasq-hotspot.pid ]; then
-        kill "$(cat /run/dnsmasq-hotspot.pid)" 2>/dev/null || true
+        pkill -F /run/dnsmasq-hotspot.pid dnsmasq 2>/dev/null || true
         rm -f /run/dnsmasq-hotspot.pid
     fi
 
@@ -174,14 +235,20 @@ do_stop() {
     log "Removing firewall rules..."
     nft delete table ip hotspot_nat 2>/dev/null || true
     nft delete table inet hotspot_fw 2>/dev/null || true
-    # Clean up old tables from previous versions
-    nft delete table ip6 hotspot6 2>/dev/null || true
-    nft delete table ip hotspot4 2>/dev/null || true
-    nft delete table inet hotspot 2>/dev/null || true
 
-    log "Disabling IP forwarding..."
-    sysctl -w net.ipv4.ip_forward=0 >/dev/null
-    sysctl -w net.ipv6.conf.all.forwarding=0 >/dev/null
+    log "Restoring IP forwarding..."
+    if [ -f "$IPV4_FWD_ORIG" ]; then
+        sysctl -w "net.ipv4.ip_forward=$(cat "$IPV4_FWD_ORIG")" >/dev/null
+        rm -f "$IPV4_FWD_ORIG"
+    else
+        sysctl -w net.ipv4.ip_forward=0 >/dev/null
+    fi
+    if [ -f "$IPV6_FWD_ORIG" ]; then
+        sysctl -w "net.ipv6.conf.all.forwarding=$(cat "$IPV6_FWD_ORIG")" >/dev/null
+        rm -f "$IPV6_FWD_ORIG"
+    else
+        sysctl -w net.ipv6.conf.all.forwarding=0 >/dev/null
+    fi
 
     log "Flushing $IFACE..."
     ip addr flush dev "$IFACE"

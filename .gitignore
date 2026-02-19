@@ -1,1 +1,6 @@
 hostapd.conf
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
