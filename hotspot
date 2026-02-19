@@ -141,7 +141,7 @@ do_start() {
 
     # Set up IPv6 default route via LTE
     local gw6
-    gw6=$(get_wan_gw6)
+    gw6=$(get_wan_gw6 || true)
     if [ -n "$gw6" ]; then
         log "Adding IPv6 default route via $gw6..."
         ip -6 route add default via "$gw6" dev "$WAN_IFACE" 2>/dev/null || true
