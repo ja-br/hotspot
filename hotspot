@@ -64,6 +64,7 @@ cleanup_on_failure() {
     err "Start failed — rolling back..."
     trap - ERR
 
+    systemctl stop hotspot-web 2>/dev/null || true
     systemctl stop hostapd 2>/dev/null || true
 
     if [ -f /run/dnsmasq-hotspot.pid ]; then
@@ -198,6 +199,7 @@ table inet hotspot_fw {
         ip protocol icmp accept
         ip6 nexthdr icmpv6 accept
         iifname "wlan0" tcp dport 22 accept
+        iifname "wlan0" tcp dport 8080 accept
         counter drop
     }
 }
@@ -205,6 +207,10 @@ NFT
 
     trap - ERR
     echo "running" > "$STATE_FILE"
+
+    # Start web interface
+    log "Starting web interface..."
+    systemctl start hotspot-web 2>/dev/null || warn "Web interface failed to start"
 
     log "Hotspot is UP!"
     log "SSID: $(grep '^ssid=' "$HOSTAPD_CONF" | cut -d= -f2)"
@@ -219,6 +225,9 @@ do_stop() {
     fi
 
     log "Stopping hotspot..."
+
+    log "Stopping web interface..."
+    systemctl stop hotspot-web 2>/dev/null || true
 
     log "Stopping hostapd..."
     systemctl stop hostapd 2>/dev/null || true

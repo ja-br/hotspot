@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Hotspot{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="cards">
+    <div class="card">
+        <h3>Hotspot</h3>
+        <p class="status {{ 'up' if state.get('hotspot_running') else 'down' }}" id="hotspot-status">
+            {{ "ACTIVE" if state.get('hotspot_running') else "INACTIVE" }}
+        </p>
+        {% if state.get('ssid') %}
+        <p class="detail">SSID: <span id="ssid">{{ state.ssid }}</span></p>
+        {% endif %}
+        <p class="detail">Uptime: <span id="uptime">{{ format_duration(state.get('uptime_s', 0)) }}</span></p>
+    </div>
+
+    <div class="card">
+        <h3>WAN (wwan0)</h3>
+        <p class="status {{ 'up' if state.get('wwan0_up') else 'down' }}" id="wwan0-status">
+            {{ "UP" if state.get('wwan0_up') else "DOWN" }}
+        </p>
+        <p class="detail" id="wwan0-ipv6">{{ state.get('wwan0_ipv6', 'n/a') }}</p>
+    </div>
+
+    <div class="card">
+        <h3>CLAT (464XLAT)</h3>
+        <p class="status {{ 'up' if state.get('clat_up') else 'down' }}" id="clat-status">
+            {{ "UP" if state.get('clat_up') else "DOWN" }}
+        </p>
+        <p class="detail" id="clat-ipv4">{{ state.get('clat_ipv4', 'n/a') }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Firewall</h3>
+        <p class="status {{ 'up' if state.get('firewall_loaded') else 'down' }}" id="fw-status">
+            {{ "LOADED" if state.get('firewall_loaded') else "NOT LOADED" }}
+        </p>
+    </div>
+
+    <div class="card">
+        <h3>Clients</h3>
+        <p class="status up" id="client-count">{{ state.get('clients', [])|length }}</p>
+        <p class="detail"><a href="{{ url_for('clients') }}">View details</a></p>
+    </div>
+</div>
+
+{% if state.get('hotspot_running') %}
+<div class="stop-section">
+    <button id="stop-btn" class="btn btn-danger" onclick="stopHotspot()">Stop Hotspot</button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Token management
+function getToken() {
+    return localStorage.getItem('hotspot_token') || '';
+}
+function promptToken() {
+    var t = prompt('Enter admin token:');
+    if (t) localStorage.setItem('hotspot_token', t);
+    return t;
+}
+
+// SSE live updates
+(function() {
+    var es = new EventSource('/api/events');
+    es.onmessage = function(e) {
+        var d = JSON.parse(e.data);
+
+        var hs = document.getElementById('hotspot-status');
+        hs.textContent = d.hotspot_running ? 'ACTIVE' : 'INACTIVE';
+        hs.className = 'status ' + (d.hotspot_running ? 'up' : 'down');
+
+        var ws = document.getElementById('wwan0-status');
+        ws.textContent = d.wwan0_up ? 'UP' : 'DOWN';
+        ws.className = 'status ' + (d.wwan0_up ? 'up' : 'down');
+
+        var cs = document.getElementById('clat-status');
+        cs.textContent = d.clat_up ? 'UP' : 'DOWN';
+        cs.className = 'status ' + (d.clat_up ? 'up' : 'down');
+
+        var fs = document.getElementById('fw-status');
+        fs.textContent = d.firewall_loaded ? 'LOADED' : 'NOT LOADED';
+        fs.className = 'status ' + (d.firewall_loaded ? 'up' : 'down');
+
+        document.getElementById('client-count').textContent = d.client_count || 0;
+        document.getElementById('wwan0-ipv6').textContent = d.wwan0_ipv6 || 'n/a';
+        document.getElementById('clat-ipv4').textContent = d.clat_ipv4 || 'n/a';
+
+        var ssid = document.getElementById('ssid');
+        if (ssid && d.ssid) ssid.textContent = d.ssid;
+
+        var uptime = document.getElementById('uptime');
+        if (uptime && d.uptime_s !== undefined) {
+            var s = d.uptime_s;
+            if (s < 60) uptime.textContent = s + 's';
+            else if (s < 3600) uptime.textContent = Math.floor(s/60) + 'm ' + (s%60) + 's';
+            else uptime.textContent = Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+        }
+    };
+})();
+
+function stopHotspot() {
+    if (!confirm('Stop the hotspot? All clients will be disconnected.')) return;
+    var token = getToken();
+    if (!token) token = promptToken();
+    if (!token) return;
+
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/stop';
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'token';
+    input.value = token;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endblock %}

@@ -21,4 +21,36 @@ elif [ ! -f /etc/hostapd/hostapd.conf ]; then
     echo "You must create /etc/hostapd/hostapd.conf with your SSID and passphrase before running the hotspot."
 fi
 
+# --- Web interface ---
+echo "Installing web interface..."
+
+WEB_DIR="/usr/local/lib/hotspot-web"
+VENV_DIR="/opt/hotspot-web/venv"
+
+# Create venv and install dependencies
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating Python venv at $VENV_DIR..."
+    mkdir -p /opt/hotspot-web
+    python3 -m venv "$VENV_DIR"
+fi
+"$VENV_DIR/bin/pip" install --quiet -r "$SCRIPT_DIR/web/requirements.txt"
+
+# Copy web files
+mkdir -p "$WEB_DIR"
+cp -r "$SCRIPT_DIR/web/"* "$WEB_DIR/"
+
+# Install systemd unit
+install -m 0644 "$SCRIPT_DIR/hotspot-web.service" /etc/systemd/system/hotspot-web.service
+systemctl daemon-reload
+systemctl enable hotspot-web
+
+# Generate admin token if it doesn't exist
+if [ ! -f /etc/hotspot-web.token ]; then
+    openssl rand -hex 16 > /etc/hotspot-web.token
+    chmod 0600 /etc/hotspot-web.token
+    echo "Admin token generated. View with: sudo cat /etc/hotspot-web.token"
+else
+    echo "Admin token already exists at /etc/hotspot-web.token"
+fi
+
 echo "Done. Run 'hotspot start' to start."

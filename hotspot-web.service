@@ -1,0 +1,14 @@
+[Unit]
+Description=Hotspot Web Interface
+After=hostapd.service
+PartOf=hostapd.service
+
+[Service]
+ExecStart=/opt/hotspot-web/venv/bin/python -m waitress --host=192.168.4.1 --port=8080 app:app
+WorkingDirectory=/usr/local/lib/hotspot-web
+KillMode=process
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
