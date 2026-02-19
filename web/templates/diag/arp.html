@@ -3,27 +3,6 @@
 {% block page_title %}ARP Table{% endblock %}
 
 {% block content %}
-{% if not authed %}
-<div class="auth-overlay" id="auth-overlay">
-    <div class="auth-modal">
-        <h2>Authentication Required</h2>
-        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem">This page requires an admin token.</p>
-        <input type="password" id="auth-token-input" placeholder="Admin token">
-        <button class="btn" onclick="submitAuth()">Authenticate</button>
-    </div>
-</div>
-<script>
-function submitAuth() {
-    var t = document.getElementById('auth-token-input').value;
-    if (!t) return;
-    localStorage.setItem('hotspot_token', t);
-    window.location.href = '{{ url_for("diag_arp") }}?token=' + encodeURIComponent(t);
-}
-document.getElementById('auth-token-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') submitAuth();
-});
-</script>
-{% else %}
 <div class="panel panel-table">
     <div class="panel-heading">ARP Cache</div>
     <div style="padding:0.5rem 1rem;background:var(--table-stripe);border-bottom:1px solid var(--border-color)">
@@ -56,5 +35,4 @@ document.getElementById('auth-token-input').addEventListener('keydown', function
         {% endif %}
     </div>
 </div>
-{% endif %}
 {% endblock %}

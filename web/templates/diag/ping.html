@@ -3,31 +3,10 @@
 {% block page_title %}Ping{% endblock %}
 
 {% block content %}
-{% if not authed %}
-<div class="auth-overlay" id="auth-overlay">
-    <div class="auth-modal">
-        <h2>Authentication Required</h2>
-        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem">This page requires an admin token.</p>
-        <input type="password" id="auth-token-input" placeholder="Admin token">
-        <button class="btn" onclick="submitAuth()">Authenticate</button>
-    </div>
-</div>
-<script>
-function submitAuth() {
-    var t = document.getElementById('auth-token-input').value;
-    if (!t) return;
-    localStorage.setItem('hotspot_token', t);
-    window.location.href = '{{ url_for("diag_ping_form") }}?token=' + encodeURIComponent(t);
-}
-document.getElementById('auth-token-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') submitAuth();
-});
-</script>
-{% else %}
 <div class="panel">
     <div class="panel-heading">Ping Host</div>
-    <form class="diag-form" method="post" id="ping-form">
-        <input type="hidden" name="token" id="ping-token">
+    <form class="diag-form" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="text" name="target" placeholder="Hostname or IP address" value="{{ target }}" required>
         <button type="submit" class="btn">Ping</button>
     </form>
@@ -36,16 +15,4 @@ document.getElementById('auth-token-input').addEventListener('keydown', function
     {% endif %}
 </div>
 <p class="hint">Sends {{ 4 }} ICMP echo requests with a 3-second timeout per packet.</p>
-
-<script>
-(function() {
-    var t = getToken();
-    if (t) document.getElementById('ping-token').value = t;
-    document.getElementById('ping-form').addEventListener('submit', function() {
-        var tv = getToken();
-        if (tv) document.getElementById('ping-token').value = tv;
-    });
-})();
-</script>
-{% endif %}
 {% endblock %}

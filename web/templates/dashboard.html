@@ -282,33 +282,32 @@ function updateBar(barId, labelId, pct) {
     };
 })();
 
+var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
 function restartService(name) {
     if (!confirm('Restart ' + name + '?')) return;
-    var token = getToken();
-    if (!token) token = promptToken();
-    if (!token) return;
     fetch('/status/services/' + name + '/restart', {
         method: 'POST',
-        headers: {'Authorization': 'Bearer ' + token}
-    }).then(function(r) { return r.json(); })
-    .then(function(d) { alert(d.message || 'Done'); })
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    }).then(function(r) {
+        if (r.status === 401) { window.location.href = '/login'; return; }
+        return r.json();
+    }).then(function(d) { if (d) alert(d.message || 'Done'); })
     .catch(function(e) { alert('Error: ' + e); });
 }
 
 function stopHotspot() {
     if (!confirm('Stop the hotspot? All clients will be disconnected.')) return;
-    var token = getToken();
-    if (!token) token = promptToken();
-    if (!token) return;
-
     var form = document.createElement('form');
     form.method = 'POST';
     form.action = '/stop';
-    var input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'token';
-    input.value = token;
-    form.appendChild(input);
+    var csrf = document.createElement('input');
+    csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = csrfToken;
+    form.appendChild(csrf);
     document.body.appendChild(form);
     form.submit();
 }

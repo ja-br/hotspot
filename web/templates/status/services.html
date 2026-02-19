@@ -48,17 +48,22 @@
 
 {% block scripts %}
 <script>
+var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
 function restartService(name) {
     if (!confirm('Restart ' + name + '?')) return;
-    var token = getToken();
-    if (!token) token = promptToken();
-    if (!token) return;
     fetch('/status/services/' + name + '/restart', {
         method: 'POST',
-        headers: {'Authorization': 'Bearer ' + token}
-    }).then(function(r) { return r.json(); })
-    .then(function(d) {
-        alert(d.message || 'Done');
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    }).then(function(r) {
+        if (r.status === 401) { window.location.href = '/login'; return; }
+        return r.json();
+    }).then(function(d) {
+        if (d) alert(d.message || 'Done');
         setTimeout(function() { location.reload(); }, 2000);
     })
     .catch(function(e) { alert('Error: ' + e); });

@@ -21,6 +21,7 @@
     <div class="panel-heading">Access Point Settings</div>
     <div class="panel-body">
         <form method="post" id="config-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="ssid">SSID</label>
                 <div class="form-input">
@@ -54,13 +55,6 @@
             </div>
 
             <div class="form-group">
-                <label for="token">Admin Token</label>
-                <div class="form-input">
-                    <input type="password" id="token" name="token" placeholder="Required to save">
-                </div>
-            </div>
-
-            <div class="form-group">
                 <label></label>
                 <div class="form-input">
                     <button type="submit" class="btn">Save Configuration</button>
@@ -73,15 +67,6 @@
 
 {% block scripts %}
 <script>
-(function() {
-    var t = localStorage.getItem('hotspot_token');
-    if (t) document.getElementById('token').value = t;
-    document.getElementById('config-form').addEventListener('submit', function() {
-        var tv = document.getElementById('token').value;
-        if (tv) localStorage.setItem('hotspot_token', tv);
-    });
-})();
-
 function togglePass() {
     var p = document.getElementById('wpa_passphrase');
     p.type = p.type === 'password' ? 'text' : 'password';

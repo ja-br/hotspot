@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Login - Hotspot{% endblock %}
+{% block page_title %}Login{% endblock %}
+
+{% block content %}
+<div class="panel" style="max-width:400px;margin:2rem auto">
+    <div class="panel-heading">Admin Authentication</div>
+    <div class="panel-body">
+        {% if error %}
+        <div class="alert alert-error">
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+            <div class="form-group" style="flex-direction:column;align-items:stretch;gap:0.5rem">
+                <label style="width:auto;text-align:left">Admin Token</label>
+                <div class="form-input">
+                    <input type="password" name="password" placeholder="Enter admin token" required autofocus style="max-width:none">
+                </div>
+            </div>
+            <div style="margin-top:1rem">
+                <button type="submit" class="btn" style="width:100%">Log In</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

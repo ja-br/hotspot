@@ -413,40 +413,24 @@ input:focus, select:focus {
     color: #2E7D32;
 }
 
-/* Auth overlay */
-.auth-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+/* Logout button in nav */
+.nav-logout-btn {
+    background: none;
+    border: none;
+    color: #BDBDBD;
+    padding: 0 1rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: inherit;
     display: flex;
     align-items: center;
-    justify-content: center;
-    z-index: 1000;
+    height: 100%;
+    border-bottom: 3px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
 }
-.auth-modal {
-    background: var(--panel-body-bg);
-    border-radius: 3px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    padding: 2rem;
-    max-width: 360px;
-    width: 90%;
-    text-align: center;
-}
-.auth-modal h2 {
-    font-size: 1rem;
-    margin-bottom: 1rem;
-    color: var(--text-primary);
-}
-.auth-modal input {
-    width: 100%;
-    max-width: none;
-    margin-bottom: 1rem;
-}
-.auth-modal .btn {
-    width: 100%;
+.nav-logout-btn:hover {
+    color: #FFFFFF;
+    border-bottom-color: var(--accent);
 }
 
 /* Logs */

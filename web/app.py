@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 from collections import deque
+from datetime import timedelta
 from pathlib import Path
 
 from flask import (
@@ -24,8 +25,65 @@ from flask import (
     request,
     url_for,
 )
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from flask_wtf.csrf import CSRFProtect
 
 app = Flask(__name__)
+
+# ---------------------------------------------------------------------------
+# Secret key — crash in production if missing
+# ---------------------------------------------------------------------------
+_secret_path = Path("/etc/hotspot-web.secret")
+if _secret_path.exists():
+    app.secret_key = _secret_path.read_text().strip()
+elif os.environ.get("FLASK_DEBUG"):
+    app.secret_key = os.urandom(32)
+else:
+    raise RuntimeError("Missing /etc/hotspot-web.secret -- run install.sh")
+
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=7)
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SAMESITE"] = "Strict"
+
+# ---------------------------------------------------------------------------
+# Flask-Login setup
+# ---------------------------------------------------------------------------
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+
+class AdminUser(UserMixin):
+    def get_id(self):
+        return "admin"
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    if user_id == "admin":
+        return AdminUser()
+    return None
+
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    if request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"error": "Login required"}), 401
+    return redirect(url_for("login", next=request.path))
+
+# ---------------------------------------------------------------------------
+# CSRF setup
+# ---------------------------------------------------------------------------
+csrf = CSRFProtect(app)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -59,36 +117,6 @@ def _read_token():
     except OSError:
         return None
 
-
-def _check_token():
-    """Abort if the request does not carry a valid admin token."""
-    expected = _read_token()
-    if not expected:
-        abort(503, "Admin token not configured")
-    token = request.headers.get("Authorization", "")
-    if token.startswith("Bearer "):
-        token = token[7:]
-    else:
-        token = request.form.get("token", "") or request.args.get("token", "")
-    if not token:
-        abort(401, "Missing admin token")
-    if not hmac.compare_digest(token, expected):
-        abort(403, "Invalid admin token")
-
-
-def _check_token_or_redirect(endpoint):
-    """For GET pages that require auth — return True if valid, False otherwise."""
-    expected = _read_token()
-    if not expected:
-        return False
-    token = request.headers.get("Authorization", "")
-    if token.startswith("Bearer "):
-        token = token[7:]
-    else:
-        token = request.args.get("token", "")
-    if not token:
-        return False
-    return hmac.compare_digest(token, expected)
 
 
 # ---------------------------------------------------------------------------
@@ -621,8 +649,47 @@ _sse_clients = 0
 _sse_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
+# Auth context processor
+# ---------------------------------------------------------------------------
+
+@app.context_processor
+def inject_auth():
+    return {"logged_in": current_user.is_authenticated}
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+def _safe_next_url(url):
+    """Validate a next= redirect target. Returns a safe URL or the dashboard."""
+    if url and url.startswith("/") and not url.startswith("//"):
+        return url
+    return url_for("dashboard")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(_safe_next_url(request.args.get("next", "")))
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        expected = _read_token()
+        if not expected:
+            return render_template("login.html",
+                                   error="Admin token not configured on server"), 503
+        if hmac.compare_digest(password, expected):
+            login_user(AdminUser(), remember=True)
+            return redirect(_safe_next_url(request.form.get("next", "")))
+        time.sleep(1)
+        return render_template("login.html", error="Invalid token"), 403
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
 
 @app.route("/")
 def index():
@@ -657,14 +724,15 @@ def logs():
 
 
 @app.route("/config")
+@login_required
 def config():
     fields = _read_hostapd_config()
     return render_template("config.html", fields=fields)
 
 
 @app.route("/config", methods=["POST"])
+@login_required
 def config_save():
-    _check_token()
 
     ssid = request.form.get("ssid", "").strip()
     passphrase = request.form.get("wpa_passphrase", "").strip()
@@ -745,8 +813,8 @@ def config_save():
 
 
 @app.route("/stop", methods=["POST"])
+@login_required
 def stop():
-    _check_token()
     # Start hotspot stop in background after a short delay
     def _delayed_stop():
         time.sleep(1)
@@ -779,8 +847,8 @@ def status_services():
 
 
 @app.route("/status/services/<name>/restart", methods=["POST"])
+@login_required
 def service_restart(name):
-    _check_token()
     svc = SERVICES.get(name)
     if not svc or not svc["restartable"]:
         abort(404)
@@ -797,9 +865,8 @@ def service_restart(name):
 
 
 @app.route("/status/firewall")
+@login_required
 def status_firewall():
-    if not _check_token_or_redirect("status_firewall"):
-        return render_template("status/firewall.html", authed=False, rules="")
     try:
         r = subprocess.run(
             ["nft", "list", "ruleset"],
@@ -808,15 +875,14 @@ def status_firewall():
         rules = r.stdout if r.returncode == 0 else f"Error: {r.stderr}"
     except (subprocess.TimeoutExpired, OSError) as e:
         rules = f"Error: {e}"
-    return render_template("status/firewall.html", authed=True, rules=rules)
+    return render_template("status/firewall.html", rules=rules)
 
 
 # -- Diagnostic pages --
 
 @app.route("/diag/arp")
+@login_required
 def diag_arp():
-    if not _check_token_or_redirect("diag_arp"):
-        return render_template("diag/arp.html", authed=False, entries=[])
     try:
         text = Path("/proc/net/arp").read_text()
         lines = text.strip().splitlines()[1:]  # skip header
@@ -832,35 +898,33 @@ def diag_arp():
                 })
     except OSError:
         entries = []
-    return render_template("diag/arp.html", authed=True, entries=entries)
+    return render_template("diag/arp.html", entries=entries)
 
 
 @app.route("/diag/routes")
+@login_required
 def diag_routes():
-    if not _check_token_or_redirect("diag_routes"):
-        return render_template("diag/routes.html", authed=False, ipv4="", ipv6="")
     stdout4, _, _ = _run_diag(["ip", "-4", "route"])
     stdout6, _, _ = _run_diag(["ip", "-6", "route"])
-    return render_template("diag/routes.html", authed=True, ipv4=stdout4, ipv6=stdout6)
+    return render_template("diag/routes.html", ipv4=stdout4, ipv6=stdout6)
 
 
 @app.route("/diag/ping", methods=["GET"])
+@login_required
 def diag_ping_form():
-    if not _check_token_or_redirect("diag_ping_form"):
-        return render_template("diag/ping.html", authed=False, output=None, target="")
-    return render_template("diag/ping.html", authed=True, output=None, target="")
+    return render_template("diag/ping.html", output=None, target="")
 
 
 @app.route("/diag/ping", methods=["POST"])
+@login_required
 def diag_ping_run():
-    _check_token()
     target = request.form.get("target", "")
     sanitized, err = _validate_target(target)
     if err:
-        return render_template("diag/ping.html", authed=True, output=f"Error: {err}", target=target)
+        return render_template("diag/ping.html", output=f"Error: {err}", target=target)
 
     if not _diag_semaphore.acquire(blocking=False):
-        return render_template("diag/ping.html", authed=True,
+        return render_template("diag/ping.html",
                                output="Error: Another diagnostic is already running. Try again shortly.",
                                target=target)
     try:
@@ -872,19 +936,18 @@ def diag_ping_run():
     finally:
         _diag_semaphore.release()
 
-    return render_template("diag/ping.html", authed=True, output=output, target=target)
+    return render_template("diag/ping.html", output=output, target=target)
 
 
 @app.route("/diag/dns", methods=["GET"])
+@login_required
 def diag_dns_form():
-    if not _check_token_or_redirect("diag_dns_form"):
-        return render_template("diag/dns.html", authed=False, output=None, target="", qtype="A")
-    return render_template("diag/dns.html", authed=True, output=None, target="", qtype="A")
+    return render_template("diag/dns.html", output=None, target="", qtype="A")
 
 
 @app.route("/diag/dns", methods=["POST"])
+@login_required
 def diag_dns_run():
-    _check_token()
     target = request.form.get("target", "")
     qtype = request.form.get("qtype", "A").upper()
     valid_qtypes = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "PTR"}
@@ -893,11 +956,11 @@ def diag_dns_run():
 
     sanitized, err = _validate_target(target)
     if err:
-        return render_template("diag/dns.html", authed=True, output=f"Error: {err}",
+        return render_template("diag/dns.html", output=f"Error: {err}",
                                target=target, qtype=qtype)
 
     if not _diag_semaphore.acquire(blocking=False):
-        return render_template("diag/dns.html", authed=True,
+        return render_template("diag/dns.html",
                                output="Error: Another diagnostic is already running. Try again shortly.",
                                target=target, qtype=qtype)
     try:
@@ -915,7 +978,7 @@ def diag_dns_run():
     finally:
         _diag_semaphore.release()
 
-    return render_template("diag/dns.html", authed=True, output=output,
+    return render_template("diag/dns.html", output=output,
                            target=target, qtype=qtype)
 
 

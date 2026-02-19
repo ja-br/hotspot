@@ -44,10 +44,14 @@ install -m 0644 "$SCRIPT_DIR/hotspot-web.service" /etc/systemd/system/hotspot-we
 systemctl daemon-reload
 systemctl enable hotspot-web
 
+# Generate Flask secret key if it doesn't exist (separate from auth token)
+if [ ! -f /etc/hotspot-web.secret ]; then
+    (umask 077; openssl rand -hex 32 > /etc/hotspot-web.secret)
+fi
+
 # Generate admin token if it doesn't exist
 if [ ! -f /etc/hotspot-web.token ]; then
-    openssl rand -hex 16 > /etc/hotspot-web.token
-    chmod 0600 /etc/hotspot-web.token
+    (umask 077; openssl rand -hex 16 > /etc/hotspot-web.token)
     echo "Admin token generated. View with: sudo cat /etc/hotspot-web.token"
 else
     echo "Admin token already exists at /etc/hotspot-web.token"
