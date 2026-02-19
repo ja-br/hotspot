@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}DNS Lookup - Hotspot{% endblock %}
+{% block page_title %}DNS Lookup{% endblock %}
+
+{% block content %}
+{% if not authed %}
+<div class="auth-overlay" id="auth-overlay">
+    <div class="auth-modal">
+        <h2>Authentication Required</h2>
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem">This page requires an admin token.</p>
+        <input type="password" id="auth-token-input" placeholder="Admin token">
+        <button class="btn" onclick="submitAuth()">Authenticate</button>
+    </div>
+</div>
+<script>
+function submitAuth() {
+    var t = document.getElementById('auth-token-input').value;
+    if (!t) return;
+    localStorage.setItem('hotspot_token', t);
+    window.location.href = '{{ url_for("diag_dns_form") }}?token=' + encodeURIComponent(t);
+}
+document.getElementById('auth-token-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') submitAuth();
+});
+</script>
+{% else %}
+<div class="panel">
+    <div class="panel-heading">DNS Lookup</div>
+    <form class="diag-form" method="post" id="dns-form">
+        <input type="hidden" name="token" id="dns-token">
+        <input type="text" name="target" placeholder="Hostname" value="{{ target }}" required>
+        <select name="qtype">
+            {% for t in ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'PTR'] %}
+            <option value="{{ t }}" {{ 'selected' if qtype == t }}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn">Lookup</button>
+    </form>
+    {% if output is not none %}
+    <pre class="log-output">{{ output }}</pre>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    var t = getToken();
+    if (t) document.getElementById('dns-token').value = t;
+    document.getElementById('dns-form').addEventListener('submit', function() {
+        var tv = getToken();
+        if (tv) document.getElementById('dns-token').value = tv;
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

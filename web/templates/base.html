@@ -8,18 +8,98 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    {% set status_endpoints = ['dashboard', 'status_interfaces', 'status_services', 'clients', 'status_firewall'] %}
+    {% set diag_endpoints = ['diag_arp', 'diag_routes', 'diag_ping_form', 'diag_ping_run', 'diag_dns_form', 'diag_dns_run'] %}
+    {% set system_endpoints = ['config', 'config_save'] %}
     <nav>
-        <a href="{{ url_for('dashboard') }}" class="brand">Hotspot</a>
+        <a class="brand" href="{{ url_for('dashboard') }}">uConsole Hotspot</a>
         <div class="nav-links">
-            <a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
-            <a href="{{ url_for('clients') }}" {% if request.endpoint == 'clients' %}class="active"{% endif %}>Clients</a>
-            <a href="{{ url_for('logs') }}" {% if request.endpoint == 'logs' %}class="active"{% endif %}>Logs</a>
-            <a href="{{ url_for('config') }}" {% if request.endpoint in ('config', 'config_save') %}class="active"{% endif %}>Config</a>
+            <div class="nav-item{{ ' active' if request.endpoint in status_endpoints }}" data-dropdown>
+                <a class="nav-toggle">Status &#9662;</a>
+                <div class="dropdown">
+                    <a href="{{ url_for('dashboard') }}"{{ ' class=active' if request.endpoint == 'dashboard' }}>Dashboard</a>
+                    <a href="{{ url_for('status_interfaces') }}"{{ ' class=active' if request.endpoint == 'status_interfaces' }}>Interfaces</a>
+                    <a href="{{ url_for('status_services') }}"{{ ' class=active' if request.endpoint == 'status_services' }}>Services</a>
+                    <a href="{{ url_for('clients') }}"{{ ' class=active' if request.endpoint == 'clients' }}>DHCP Leases</a>
+                    <a href="#" class="auth-link" data-href="{{ url_for('status_firewall') }}"{{ ' class=active' if request.endpoint == 'status_firewall' }}>Firewall Rules</a>
+                </div>
+            </div>
+            <div class="nav-item{{ ' active' if request.endpoint in diag_endpoints }}" data-dropdown>
+                <a class="nav-toggle">Diagnostics &#9662;</a>
+                <div class="dropdown">
+                    <a href="#" class="auth-link" data-href="{{ url_for('diag_arp') }}"{{ ' class=active' if request.endpoint == 'diag_arp' }}>ARP Table</a>
+                    <a href="#" class="auth-link" data-href="{{ url_for('diag_routes') }}"{{ ' class=active' if request.endpoint == 'diag_routes' }}>Routes</a>
+                    <a href="#" class="auth-link" data-href="{{ url_for('diag_ping_form') }}"{{ ' class=active' if request.endpoint in ('diag_ping_form', 'diag_ping_run') }}>Ping</a>
+                    <a href="#" class="auth-link" data-href="{{ url_for('diag_dns_form') }}"{{ ' class=active' if request.endpoint in ('diag_dns_form', 'diag_dns_run') }}>DNS Lookup</a>
+                </div>
+            </div>
+            <a href="{{ url_for('logs') }}"{{ ' class=active' if request.endpoint == 'logs' }}>Logs</a>
+            <div class="nav-item{{ ' active' if request.endpoint in system_endpoints }}" data-dropdown>
+                <a class="nav-toggle">System &#9662;</a>
+                <div class="dropdown">
+                    <a href="{{ url_for('config') }}"{{ ' class=active' if request.endpoint in system_endpoints }}>Configuration</a>
+                </div>
+            </div>
         </div>
     </nav>
+    <div class="page-header">
+        <h1>{% block page_title %}{% endblock %}</h1>
+    </div>
     <main>
         {% block content %}{% endblock %}
     </main>
+    <footer>uConsole Hotspot Manager</footer>
+    <script>
+    /* Dropdown toggle — click/tap driven (not hover) for touchscreen support */
+    document.querySelectorAll('[data-dropdown]').forEach(function(item) {
+        item.querySelector('.nav-toggle').addEventListener('click', function(e) {
+            e.preventDefault();
+            var wasOpen = item.classList.contains('open');
+            document.querySelectorAll('.nav-item.open').forEach(function(el) { el.classList.remove('open'); });
+            if (!wasOpen) item.classList.add('open');
+        });
+    });
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('[data-dropdown]')) {
+            document.querySelectorAll('.nav-item.open').forEach(function(el) { el.classList.remove('open'); });
+        }
+    });
+
+    /* Auth helpers — token stored in localStorage */
+    function getToken() {
+        return localStorage.getItem('hotspot_token') || '';
+    }
+    function promptToken() {
+        var t = prompt('Enter admin token:');
+        if (t) localStorage.setItem('hotspot_token', t);
+        return t;
+    }
+
+    /* Auth-required links: append ?token= for GET page navigation */
+    document.querySelectorAll('.auth-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var href = link.getAttribute('data-href');
+            if (!href) return;
+            var token = getToken();
+            if (!token) token = promptToken();
+            if (!token) return;
+            var sep = href.indexOf('?') >= 0 ? '&' : '?';
+            window.location.href = href + sep + 'token=' + encodeURIComponent(token);
+        });
+    });
+
+    /* Strip token from URL after page load to avoid leaking in browser history */
+    (function() {
+        var url = new URL(window.location);
+        if (url.searchParams.has('token')) {
+            var t = url.searchParams.get('token');
+            if (t) localStorage.setItem('hotspot_token', t);
+            url.searchParams.delete('token');
+            history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+    })();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,40 +1,43 @@
 {% extends "base.html" %}
 {% block title %}Clients - Hotspot{% endblock %}
+{% block page_title %}Clients{% endblock %}
 
 {% block content %}
-<h1>Connected Clients</h1>
-
-{% if clients %}
-<table>
-    <thead>
-        <tr>
-            <th>Hostname</th>
-            <th>IP</th>
-            <th>MAC</th>
-            <th>RX</th>
-            <th>TX</th>
-            <th>Connected</th>
-            <th>Status</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for c in clients %}
-        <tr>
-            <td>{{ c.hostname or '—' }}</td>
-            <td>{{ c.ip or '—' }}</td>
-            <td><code>{{ c.mac }}</code></td>
-            <td>{{ format_bytes(c.rx_bytes) }}</td>
-            <td>{{ format_bytes(c.tx_bytes) }}</td>
-            <td>{{ format_duration(c.connected_time) }}</td>
-            <td><span class="badge {{ 'up' if c.associated else 'down' }}">{{ "associated" if c.associated else "lease only" }}</span></td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p class="empty">No clients connected.</p>
-{% endif %}
-
+<div class="panel panel-table">
+    <div class="panel-heading">DHCP Leases &amp; Associated Clients</div>
+    <div class="panel-body">
+        {% if clients %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Hostname</th>
+                    <th>IP</th>
+                    <th>MAC</th>
+                    <th>RX</th>
+                    <th>TX</th>
+                    <th>Connected</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in clients %}
+                <tr>
+                    <td>{{ c.hostname or '—' }}</td>
+                    <td>{{ c.ip or '—' }}</td>
+                    <td><code>{{ c.mac }}</code></td>
+                    <td>{{ format_bytes(c.rx_bytes) }}</td>
+                    <td>{{ format_bytes(c.tx_bytes) }}</td>
+                    <td>{{ format_duration(c.connected_time) }}</td>
+                    <td><span class="badge {{ 'up' if c.associated else 'down' }}">{{ "Associated" if c.associated else "Lease Only" }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No clients connected.</p>
+        {% endif %}
+    </div>
+</div>
 <p class="hint">Auto-refreshes every 5 seconds.</p>
 {% endblock %}
 

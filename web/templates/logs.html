@@ -1,23 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Logs - Hotspot{% endblock %}
+{% block page_title %}Log Viewer{% endblock %}
 
 {% block content %}
-<h1>DNS Query Log</h1>
-
-<form class="log-controls" method="get">
-    <label>Lines: <input type="number" name="n" value="{{ n }}" min="10" max="500" size="4"></label>
-    <button type="submit" class="btn">Refresh</button>
-</form>
-
-<pre class="log-output">{% for line in lines %}{{ line }}{% endfor %}</pre>
-
+<div class="panel">
+    <div class="panel-heading">DNS Query Log</div>
+    <form class="log-controls" method="get">
+        <label>Lines:</label>
+        <input type="number" name="n" value="{{ n }}" min="10" max="500" size="4">
+        <button type="submit" class="btn">Refresh</button>
+    </form>
+    <pre class="log-output">{% for line in lines %}{{ line }}{% endfor %}</pre>
+</div>
 <p class="hint">Auto-refreshes every 10 seconds. Max 500 lines.</p>
 {% endblock %}
 
 {% block scripts %}
 <script>
 setTimeout(function() { location.reload(); }, 10000);
-// Auto-scroll to bottom
 var pre = document.querySelector('.log-output');
 if (pre) pre.scrollTop = pre.scrollHeight;
 </script>

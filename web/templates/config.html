@@ -1,64 +1,81 @@
 {% extends "base.html" %}
 {% block title %}Config - Hotspot{% endblock %}
+{% block page_title %}Configuration{% endblock %}
 
 {% block content %}
-<h1>Hotspot Configuration</h1>
-
 {% if errors %}
 <div class="alert alert-error">
     {% for e in errors %}
-    <p>{{ e }}</p>
+    <p>&#10007; {{ e }}</p>
     {% endfor %}
 </div>
 {% endif %}
 
 {% if success %}
 <div class="alert alert-success">
-    <p>{{ success }}</p>
+    <p>&#10003; {{ success }}</p>
 </div>
 {% endif %}
 
-<form method="post" id="config-form">
-    <div class="form-group">
-        <label for="ssid">SSID</label>
-        <input type="text" id="ssid" name="ssid" value="{{ fields.ssid }}" maxlength="32" required>
-    </div>
+<div class="panel">
+    <div class="panel-heading">Access Point Settings</div>
+    <div class="panel-body">
+        <form method="post" id="config-form">
+            <div class="form-group">
+                <label for="ssid">SSID</label>
+                <div class="form-input">
+                    <input type="text" id="ssid" name="ssid" value="{{ fields.ssid }}" maxlength="32" required>
+                </div>
+            </div>
 
-    <div class="form-group">
-        <label for="wpa_passphrase">Passphrase</label>
-        <input type="password" id="wpa_passphrase" name="wpa_passphrase" value="{{ fields.wpa_passphrase }}" minlength="8" maxlength="63" required>
-        <button type="button" class="btn btn-small" onclick="togglePass()">Show</button>
-    </div>
+            <div class="form-group">
+                <label for="wpa_passphrase">Passphrase</label>
+                <div class="form-input">
+                    <input type="password" id="wpa_passphrase" name="wpa_passphrase" value="{{ fields.wpa_passphrase }}" minlength="8" maxlength="63" required>
+                    <button type="button" class="btn btn-small" onclick="togglePass()">Show</button>
+                </div>
+            </div>
 
-    <div class="form-group">
-        <label for="hw_mode">Band</label>
-        <select id="hw_mode" name="hw_mode">
-            <option value="g" {{ 'selected' if fields.hw_mode == 'g' }}>2.4 GHz (g)</option>
-            <option value="a" {{ 'selected' if fields.hw_mode == 'a' }}>5 GHz (a)</option>
-        </select>
-    </div>
+            <div class="form-group">
+                <label for="hw_mode">Band</label>
+                <div class="form-input">
+                    <select id="hw_mode" name="hw_mode">
+                        <option value="g" {{ 'selected' if fields.hw_mode == 'g' }}>2.4 GHz (g)</option>
+                        <option value="a" {{ 'selected' if fields.hw_mode == 'a' }}>5 GHz (a)</option>
+                    </select>
+                </div>
+            </div>
 
-    <div class="form-group">
-        <label for="channel">Channel</label>
-        <select id="channel" name="channel"></select>
-    </div>
+            <div class="form-group">
+                <label for="channel">Channel</label>
+                <div class="form-input">
+                    <select id="channel" name="channel"></select>
+                </div>
+            </div>
 
-    <div class="form-group">
-        <label for="token">Admin Token</label>
-        <input type="password" id="token" name="token" placeholder="Required to save">
-    </div>
+            <div class="form-group">
+                <label for="token">Admin Token</label>
+                <div class="form-input">
+                    <input type="password" id="token" name="token" placeholder="Required to save">
+                </div>
+            </div>
 
-    <button type="submit" class="btn">Save Configuration</button>
-</form>
+            <div class="form-group">
+                <label></label>
+                <div class="form-input">
+                    <button type="submit" class="btn">Save Configuration</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Pre-fill token from localStorage
 (function() {
     var t = localStorage.getItem('hotspot_token');
     if (t) document.getElementById('token').value = t;
-    // Save token on submit
     document.getElementById('config-form').addEventListener('submit', function() {
         var tv = document.getElementById('token').value;
         if (tv) localStorage.setItem('hotspot_token', tv);
@@ -70,7 +87,6 @@ function togglePass() {
     p.type = p.type === 'password' ? 'text' : 'password';
 }
 
-// Dynamic channel list based on selected band
 var channels = {
     g: [1,2,3,4,5,6,7,8,9,10,11],
     a: [36,40,44,48,149,153,157,161,165]
@@ -92,7 +108,7 @@ function updateChannels() {
     if (savedChannel === '0') sel.value = '0';
 }
 document.getElementById('hw_mode').addEventListener('change', function() {
-    savedChannel = '0';  // reset to auto on band change
+    savedChannel = '0';
     updateChannels();
 });
 updateChannels();

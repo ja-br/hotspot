@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Services - Hotspot{% endblock %}
+{% block page_title %}Services{% endblock %}
+
+{% block content %}
+<div class="panel panel-table">
+    <div class="panel-heading">Service Status</div>
+    <div class="panel-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Description</th>
+                    <th>PID</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, svc in services.items() %}
+                <tr>
+                    <td><strong>{{ name }}</strong></td>
+                    <td>{{ svc.label }}</td>
+                    <td>{{ svc.pid or '—' }}</td>
+                    <td><span class="status-icon {{ 'up' if svc.running else 'down' }}">{% if svc.running %}&#10003; Running{% else %}&#10007; Stopped{% endif %}</span></td>
+                    <td>
+                        {% if svc_meta.get(name, {}).get('restartable') %}
+                        <button class="btn-restart" onclick="restartService('{{ name }}')">&#8635; Restart</button>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td><strong>firewall</strong></td>
+                    <td>nftables</td>
+                    <td>—</td>
+                    <td><span class="status-icon {{ 'up' if firewall_loaded else 'down' }}">{% if firewall_loaded %}&#10003; Loaded{% else %}&#10007; Not Loaded{% endif %}</span></td>
+                    <td>—</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="hint">Auto-refreshes every 5 seconds.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function restartService(name) {
+    if (!confirm('Restart ' + name + '?')) return;
+    var token = getToken();
+    if (!token) token = promptToken();
+    if (!token) return;
+    fetch('/status/services/' + name + '/restart', {
+        method: 'POST',
+        headers: {'Authorization': 'Bearer ' + token}
+    }).then(function(r) { return r.json(); })
+    .then(function(d) {
+        alert(d.message || 'Done');
+        setTimeout(function() { location.reload(); }, 2000);
+    })
+    .catch(function(e) { alert('Error: ' + e); });
+}
+setTimeout(function() { location.reload(); }, 5000);
+</script>
+{% endblock %}

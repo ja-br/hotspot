@@ -1,48 +1,168 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - Hotspot{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
-<h1>Dashboard</h1>
+<div id="stale-banner" class="stale-banner">Data may be stale — status updates have not been received recently.</div>
 
-<div class="cards">
-    <div class="card">
-        <h3>Hotspot</h3>
-        <p class="status {{ 'up' if state.get('hotspot_running') else 'down' }}" id="hotspot-status">
-            {{ "ACTIVE" if state.get('hotspot_running') else "INACTIVE" }}
-        </p>
-        {% if state.get('ssid') %}
-        <p class="detail">SSID: <span id="ssid">{{ state.ssid }}</span></p>
-        {% endif %}
-        <p class="detail">Uptime: <span id="uptime">{{ format_duration(state.get('uptime_s', 0)) }}</span></p>
+<div class="dashboard-grid">
+    <!-- System Information -->
+    <div class="panel">
+        <div class="panel-heading">System Information</div>
+        <div class="panel-body">
+            <table class="kv-table">
+                <tr>
+                    <td>Hostname</td>
+                    <td id="hostname">{{ state.get('hostname', 'unknown') }}</td>
+                </tr>
+                <tr>
+                    <td>Status</td>
+                    <td>
+                        <span class="status-icon {{ 'up' if state.get('hotspot_running') else 'down' }}" id="hotspot-status">{% if state.get('hotspot_running') %}&#9650; Running{% else %}&#9660; Stopped{% endif %}</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>SSID</td>
+                    <td id="ssid">{{ state.get('ssid', 'n/a') }}</td>
+                </tr>
+                <tr>
+                    <td>System Uptime</td>
+                    <td id="sys-uptime">{{ format_duration(state.get('sys_uptime_s', 0)) }}</td>
+                </tr>
+                <tr>
+                    <td>Hotspot Uptime</td>
+                    <td id="uptime">{{ format_duration(state.get('uptime_s', 0)) }}</td>
+                </tr>
+                <tr>
+                    <td>CPU</td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress-bar" id="cpu-bar" style="width: {{ state.get('cpu_pct', 0) }}%"></div>
+                            <span class="progress-label" id="cpu-label">{{ state.get('cpu_pct', 0) }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Memory</td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress-bar" id="mem-bar" style="width: {{ state.get('mem_pct', 0) }}%"></div>
+                            <span class="progress-label" id="mem-label">{{ state.get('mem_pct', 0) }}%</span>
+                        </div>
+                        <span style="font-size:0.75rem;color:var(--text-secondary)" id="mem-detail">
+                            {{ "%.0f"|format(state.get('mem_used_kb', 0) / 1024) }} / {{ "%.0f"|format(state.get('mem_total_kb', 0) / 1024) }} MB
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Load Average</td>
+                    <td id="load-avg">{{ state.get('load_1', 0) }} / {{ state.get('load_5', 0) }} / {{ state.get('load_15', 0) }}</td>
+                </tr>
+                <tr>
+                    <td>Disk</td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress-bar" id="disk-bar" style="width: {{ state.get('disk_pct', 0) }}%"></div>
+                            <span class="progress-label" id="disk-label">{{ state.get('disk_pct', 0) }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Clients</td>
+                    <td><a href="{{ url_for('clients') }}"><span id="client-count">{{ state.get('clients', [])|length }}</span> connected</a></td>
+                </tr>
+            </table>
+        </div>
     </div>
 
-    <div class="card">
-        <h3>WAN (wwan0)</h3>
-        <p class="status {{ 'up' if state.get('wwan0_up') else 'down' }}" id="wwan0-status">
-            {{ "UP" if state.get('wwan0_up') else "DOWN" }}
-        </p>
-        <p class="detail" id="wwan0-ipv6">{{ state.get('wwan0_ipv6', 'n/a') }}</p>
+    <!-- Interfaces -->
+    <div class="panel panel-table">
+        <div class="panel-heading">Interfaces</div>
+        <div class="panel-body">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Interface</th>
+                        <th>Status</th>
+                        <th>Address</th>
+                        <th>In</th>
+                        <th>Out</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>wwan0</td>
+                        <td><span class="status-icon {{ 'up' if state.get('wwan0_up') else 'down' }}" id="wwan0-status">{% if state.get('wwan0_up') %}&#9650; Up{% else %}&#9660; Down{% endif %}</span></td>
+                        <td id="wwan0-addr">{{ state.get('wwan0_ipv6') or 'n/a' }}</td>
+                        <td id="wwan0-rx">{{ format_rate(state.get('wwan0_rx_bps', 0)) }}</td>
+                        <td id="wwan0-tx">{{ format_rate(state.get('wwan0_tx_bps', 0)) }}</td>
+                    </tr>
+                    <tr>
+                        <td>clat</td>
+                        <td><span class="status-icon {{ 'up' if state.get('clat_up') else 'down' }}" id="clat-status">{% if state.get('clat_up') %}&#9650; Up{% else %}&#9660; Down{% endif %}</span></td>
+                        <td id="clat-addr">{{ state.get('clat_ipv4') or 'n/a' }}</td>
+                        <td id="clat-rx">{{ format_rate(state.get('clat_rx_bps', 0)) }}</td>
+                        <td id="clat-tx">{{ format_rate(state.get('clat_tx_bps', 0)) }}</td>
+                    </tr>
+                    <tr>
+                        <td>wlan0</td>
+                        <td><span class="status-icon {{ 'up' if state.get('wlan0_up') else 'down' }}" id="wlan0-status">{% if state.get('wlan0_up') %}&#9650; Up{% else %}&#9660; Down{% endif %}</span></td>
+                        <td>192.168.4.1/24</td>
+                        <td id="wlan0-rx">{{ format_rate(state.get('wlan0_rx_bps', 0)) }}</td>
+                        <td id="wlan0-tx">{{ format_rate(state.get('wlan0_tx_bps', 0)) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="hint"><a href="{{ url_for('status_interfaces') }}">View Details</a></p>
     </div>
 
-    <div class="card">
-        <h3>CLAT (464XLAT)</h3>
-        <p class="status {{ 'up' if state.get('clat_up') else 'down' }}" id="clat-status">
-            {{ "UP" if state.get('clat_up') else "DOWN" }}
-        </p>
-        <p class="detail" id="clat-ipv4">{{ state.get('clat_ipv4', 'n/a') }}</p>
+    <!-- Services -->
+    <div class="panel panel-full panel-table">
+        <div class="panel-heading">Services</div>
+        <div class="panel-body">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set svcs = state.get('services', {}) %}
+                    <tr>
+                        <td>hostapd — WiFi AP</td>
+                        <td><span class="status-icon {{ 'up' if svcs.get('hostapd', {}).get('running') else 'down' }}" id="svc-hostapd">{% if svcs.get('hostapd', {}).get('running') %}&#10003; Running{% else %}&#10007; Stopped{% endif %}</span></td>
+                        <td><button class="btn-restart" onclick="restartService('hostapd')">&#8635; Restart</button></td>
+                    </tr>
+                    <tr>
+                        <td>dnsmasq — DHCP / DNS</td>
+                        <td><span class="status-icon {{ 'up' if svcs.get('dnsmasq', {}).get('running') else 'down' }}" id="svc-dnsmasq">{% if svcs.get('dnsmasq', {}).get('running') %}&#10003; Running{% else %}&#10007; Stopped{% endif %}</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>clatd — 464XLAT</td>
+                        <td><span class="status-icon {{ 'up' if svcs.get('clatd', {}).get('running') else 'down' }}" id="svc-clatd">{% if svcs.get('clatd', {}).get('running') %}&#10003; Running{% else %}&#10007; Stopped{% endif %}</span></td>
+                        <td><button class="btn-restart" onclick="restartService('clatd')">&#8635; Restart</button></td>
+                    </tr>
+                    <tr>
+                        <td>Firewall</td>
+                        <td><span class="status-icon {{ 'up' if state.get('firewall_loaded') else 'down' }}" id="fw-status">{% if state.get('firewall_loaded') %}&#10003; Loaded{% else %}&#10007; Not Loaded{% endif %}</span></td>
+                        <td>—</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="card">
-        <h3>Firewall</h3>
-        <p class="status {{ 'up' if state.get('firewall_loaded') else 'down' }}" id="fw-status">
-            {{ "LOADED" if state.get('firewall_loaded') else "NOT LOADED" }}
-        </p>
-    </div>
-
-    <div class="card">
-        <h3>Clients</h3>
-        <p class="status up" id="client-count">{{ state.get('clients', [])|length }}</p>
-        <p class="detail"><a href="{{ url_for('clients') }}">View details</a></p>
+    <!-- Gateway -->
+    <div class="panel panel-full">
+        <div class="panel-heading">Gateway</div>
+        <div class="panel-body gateway-row">
+            IPv6 Gateway: <strong id="gw6-addr">{{ state.get('gw6_addr') or 'n/a' }}</strong>
+            via <strong id="gw6-dev">{{ state.get('gw6_dev') or 'n/a' }}</strong>
+        </div>
     </div>
 </div>
 
@@ -55,54 +175,125 @@
 
 {% block scripts %}
 <script>
-// Token management
-function getToken() {
-    return localStorage.getItem('hotspot_token') || '';
-}
-function promptToken() {
-    var t = prompt('Enter admin token:');
-    if (t) localStorage.setItem('hotspot_token', t);
-    return t;
+function formatRate(bps) {
+    if (bps < 1024) return bps + ' B/s';
+    if (bps < 1048576) return (bps / 1024).toFixed(1) + ' KB/s';
+    return (bps / 1048576).toFixed(1) + ' MB/s';
 }
 
-// SSE live updates
+function formatDuration(s) {
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+    return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+
+function setStatus(el, isUp, upText, downText) {
+    if (!el) return;
+    el.innerHTML = isUp ? '&#9650; ' + upText : '&#9660; ' + downText;
+    el.className = 'status-icon ' + (isUp ? 'up' : 'down');
+}
+
+function setSvcStatus(el, isUp) {
+    if (!el) return;
+    el.innerHTML = isUp ? '&#10003; Running' : '&#10007; Stopped';
+    el.className = 'status-icon ' + (isUp ? 'up' : 'down');
+}
+
+function updateBar(barId, labelId, pct) {
+    var bar = document.getElementById(barId);
+    var label = document.getElementById(labelId);
+    if (!bar) return;
+    bar.style.width = pct + '%';
+    bar.className = 'progress-bar' + (pct > 90 ? ' danger' : pct > 70 ? ' warn' : '');
+    if (label) label.textContent = pct + '%';
+}
+
 (function() {
     var es = new EventSource('/api/events');
     es.onmessage = function(e) {
         var d = JSON.parse(e.data);
 
-        var hs = document.getElementById('hotspot-status');
-        hs.textContent = d.hotspot_running ? 'ACTIVE' : 'INACTIVE';
-        hs.className = 'status ' + (d.hotspot_running ? 'up' : 'down');
+        /* System info */
+        var hn = document.getElementById('hostname');
+        if (hn && d.hostname) hn.textContent = d.hostname;
 
-        var ws = document.getElementById('wwan0-status');
-        ws.textContent = d.wwan0_up ? 'UP' : 'DOWN';
-        ws.className = 'status ' + (d.wwan0_up ? 'up' : 'down');
-
-        var cs = document.getElementById('clat-status');
-        cs.textContent = d.clat_up ? 'UP' : 'DOWN';
-        cs.className = 'status ' + (d.clat_up ? 'up' : 'down');
-
-        var fs = document.getElementById('fw-status');
-        fs.textContent = d.firewall_loaded ? 'LOADED' : 'NOT LOADED';
-        fs.className = 'status ' + (d.firewall_loaded ? 'up' : 'down');
-
-        document.getElementById('client-count').textContent = d.client_count || 0;
-        document.getElementById('wwan0-ipv6').textContent = d.wwan0_ipv6 || 'n/a';
-        document.getElementById('clat-ipv4').textContent = d.clat_ipv4 || 'n/a';
+        setStatus(document.getElementById('hotspot-status'), d.hotspot_running, 'Running', 'Stopped');
 
         var ssid = document.getElementById('ssid');
         if (ssid && d.ssid) ssid.textContent = d.ssid;
 
+        var sysUp = document.getElementById('sys-uptime');
+        if (sysUp && d.sys_uptime_s !== undefined) sysUp.textContent = formatDuration(d.sys_uptime_s);
+
         var uptime = document.getElementById('uptime');
-        if (uptime && d.uptime_s !== undefined) {
-            var s = d.uptime_s;
-            if (s < 60) uptime.textContent = s + 's';
-            else if (s < 3600) uptime.textContent = Math.floor(s/60) + 'm ' + (s%60) + 's';
-            else uptime.textContent = Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+        if (uptime && d.uptime_s !== undefined) uptime.textContent = formatDuration(d.uptime_s);
+
+        updateBar('cpu-bar', 'cpu-label', d.cpu_pct || 0);
+        updateBar('mem-bar', 'mem-label', d.mem_pct || 0);
+        updateBar('disk-bar', 'disk-label', d.disk_pct || 0);
+
+        var memDetail = document.getElementById('mem-detail');
+        if (memDetail) memDetail.textContent = Math.round((d.mem_used_kb || 0) / 1024) + ' / ' + Math.round((d.mem_total_kb || 0) / 1024) + ' MB';
+
+        var loadAvg = document.getElementById('load-avg');
+        if (loadAvg) loadAvg.textContent = (d.load_1 || 0) + ' / ' + (d.load_5 || 0) + ' / ' + (d.load_15 || 0);
+
+        document.getElementById('client-count').textContent = d.client_count || 0;
+
+        /* Interfaces */
+        setStatus(document.getElementById('wwan0-status'), d.wwan0_up, 'Up', 'Down');
+        setStatus(document.getElementById('clat-status'), d.clat_up, 'Up', 'Down');
+        setStatus(document.getElementById('wlan0-status'), d.wlan0_up, 'Up', 'Down');
+
+        var wAddr = document.getElementById('wwan0-addr');
+        if (wAddr) wAddr.textContent = d.wwan0_ipv6 || 'n/a';
+        var cAddr = document.getElementById('clat-addr');
+        if (cAddr) cAddr.textContent = d.clat_ipv4 || 'n/a';
+
+        var fields = ['wwan0-rx','wwan0-tx','clat-rx','clat-tx','wlan0-rx','wlan0-tx'];
+        var keys = ['wwan0_rx_bps','wwan0_tx_bps','clat_rx_bps','clat_tx_bps','wlan0_rx_bps','wlan0_tx_bps'];
+        for (var i = 0; i < fields.length; i++) {
+            var el = document.getElementById(fields[i]);
+            if (el) el.textContent = formatRate(d[keys[i]] || 0);
+        }
+
+        /* Services */
+        setSvcStatus(document.getElementById('svc-hostapd'), d.svc_hostapd);
+        setSvcStatus(document.getElementById('svc-dnsmasq'), d.svc_dnsmasq);
+        setSvcStatus(document.getElementById('svc-clatd'), d.svc_clatd);
+
+        var fwEl = document.getElementById('fw-status');
+        if (fwEl) {
+            fwEl.innerHTML = d.firewall_loaded ? '&#10003; Loaded' : '&#10007; Not Loaded';
+            fwEl.className = 'status-icon ' + (d.firewall_loaded ? 'up' : 'down');
+        }
+
+        /* Gateway */
+        var gwAddr = document.getElementById('gw6-addr');
+        if (gwAddr) gwAddr.textContent = d.gw6_addr || 'n/a';
+        var gwDev = document.getElementById('gw6-dev');
+        if (gwDev) gwDev.textContent = d.gw6_dev || 'n/a';
+
+        /* Stale banner */
+        var stale = document.getElementById('stale-banner');
+        if (stale) {
+            stale.className = d.data_stale ? 'stale-banner visible' : 'stale-banner';
         }
     };
 })();
+
+function restartService(name) {
+    if (!confirm('Restart ' + name + '?')) return;
+    var token = getToken();
+    if (!token) token = promptToken();
+    if (!token) return;
+    fetch('/status/services/' + name + '/restart', {
+        method: 'POST',
+        headers: {'Authorization': 'Bearer ' + token}
+    }).then(function(r) { return r.json(); })
+    .then(function(d) { alert(d.message || 'Done'); })
+    .catch(function(e) { alert('Error: ' + e); });
+}
 
 function stopHotspot() {
     if (!confirm('Stop the hotspot? All clients will be disconnected.')) return;

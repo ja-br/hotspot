@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Interfaces - Hotspot{% endblock %}
+{% block page_title %}Interfaces{% endblock %}
+
+{% block content %}
+{% for name, iface in ifaces.items() %}
+<div class="panel">
+    <div class="panel-heading">{{ name }} — <span class="badge {{ 'up' if iface.up else 'down' }}">{{ "Up" if iface.up else "Down" }}</span></div>
+    <div class="panel-body">
+        <table class="kv-table">
+            <tr>
+                <td>Status</td>
+                <td><span class="status-icon {{ 'up' if iface.up else 'down' }}">{% if iface.up %}&#9650; Up{% else %}&#9660; Down{% endif %}</span></td>
+            </tr>
+            <tr>
+                <td>MTU</td>
+                <td>{{ iface.mtu }}</td>
+            </tr>
+            <tr>
+                <td>Addresses</td>
+                <td>{% for addr in iface.addresses %}<code>{{ addr }}</code>{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</td>
+            </tr>
+            <tr>
+                <td>RX Bytes</td>
+                <td>{{ format_bytes(iface.rx_bytes) }}</td>
+            </tr>
+            <tr>
+                <td>TX Bytes</td>
+                <td>{{ format_bytes(iface.tx_bytes) }}</td>
+            </tr>
+            <tr>
+                <td>RX Packets</td>
+                <td>{{ "{:,}".format(iface.rx_packets) }}</td>
+            </tr>
+            <tr>
+                <td>TX Packets</td>
+                <td>{{ "{:,}".format(iface.tx_packets) }}</td>
+            </tr>
+            <tr>
+                <td>RX Errors</td>
+                <td>{{ "{:,}".format(iface.rx_errors) }}</td>
+            </tr>
+            <tr>
+                <td>TX Errors</td>
+                <td>{{ "{:,}".format(iface.tx_errors) }}</td>
+            </tr>
+            <tr>
+                <td>RX Rate</td>
+                <td>{{ format_rate(iface.rx_bps) }}</td>
+            </tr>
+            <tr>
+                <td>TX Rate</td>
+                <td>{{ format_rate(iface.tx_bps) }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+{% endfor %}
+<p class="hint">Auto-refreshes every 5 seconds.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+setTimeout(function() { location.reload(); }, 5000);
+</script>
+{% endblock %}
